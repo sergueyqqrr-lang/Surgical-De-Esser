@@ -17,9 +17,21 @@ public:
     explicit SpectrumAnalyzer (SurgicalDeEsserAudioProcessor& p) : proc (p) { startTimerHz (30); }
     void paint (juce::Graphics& g) override;
 
+    void mouseMove (const juce::MouseEvent& e) override;
+    void mouseDown (const juce::MouseEvent& e) override;
+    void mouseDrag (const juce::MouseEvent& e) override;
+    void mouseUp (const juce::MouseEvent& e) override;
+    void mouseExit (const juce::MouseEvent& e) override;
+
 private:
     void timerCallback() override;
     float freqToX (float freqHz, float width) const;
+    float xToFreq (float x, float width) const;
+
+    enum class EdgeTarget { none, low, high };
+    EdgeTarget dragging = EdgeTarget::none;
+    EdgeTarget hovering = EdgeTarget::none;
+    static constexpr float grabRadiusPx = 8.0f;
 
     SurgicalDeEsserAudioProcessor& proc;
 
