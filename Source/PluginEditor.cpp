@@ -284,7 +284,7 @@ void SpectrumAnalyzer::paint (juce::Graphics& g)
         const juce::Colour eqColour (0xffe8a33d);
         constexpr float eqRangeDb = 18.0f; // el EQ tiene ±18dB de rango por banda
 
-        auto eqDbToY = [&bounds] (float db)
+        auto eqDbToY = [&bounds, eqRangeDb] (float db)
         {
             auto level01 = juce::jmap (db, -eqRangeDb, eqRangeDb, 0.0f, 1.0f);
             return bounds.getBottom() - level01 * bounds.getHeight();
