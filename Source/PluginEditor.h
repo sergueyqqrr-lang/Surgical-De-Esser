@@ -23,15 +23,16 @@ public:
     void mouseUp (const juce::MouseEvent& e) override;
     void mouseExit (const juce::MouseEvent& e) override;
 
+    enum class EdgeTarget { none, low, high };
+
 private:
     void timerCallback() override;
     float freqToX (float freqHz, float width) const;
     float xToFreq (float x, float width) const;
 
-    enum class EdgeTarget { none, low, high };
+    static constexpr float grabRadiusPx = 8.0f;
     EdgeTarget dragging = EdgeTarget::none;
     EdgeTarget hovering = EdgeTarget::none;
-    static constexpr float grabRadiusPx = 8.0f;
 
     SurgicalDeEsserAudioProcessor& proc;
 
