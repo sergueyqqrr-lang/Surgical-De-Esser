@@ -67,6 +67,26 @@ void SpectrumAnalyzer::paint (juce::Graphics& g)
     auto sr = proc.getSampleRate();
     if (sr <= 0.0) sr = 44100.0;
 
+    constexpr float minDb = -100.0f;
+    constexpr float maxDb = 0.0f;
+    auto dbToY = [&bounds] (float db)
+    {
+        auto level01 = juce::jmap (db, minDb, maxDb, 0.0f, 1.0f);
+        return bounds.getBottom() - level01 * bounds.getHeight();
+    };
+
+    // Líneas y etiquetas de dB (eje vertical)
+    g.setFont (10.0f);
+    for (float db = maxDb; db >= minDb; db -= 20.0f)
+    {
+        auto y = dbToY (db);
+        g.setColour (Palette::text.withAlpha (db == 0.0f ? 0.0f : 0.10f));
+        g.drawHorizontalLine ((int) y, bounds.getX(), bounds.getRight());
+
+        g.setColour (Palette::text.withAlpha (0.4f));
+        g.drawText (juce::String ((int) db), (int) bounds.getX() + 2, (int) y - 12, 40, 12, juce::Justification::left);
+    }
+
     // Líneas de referencia de frecuencia (100Hz, 1kHz, 10kHz)
     g.setColour (Palette::text.withAlpha (0.15f));
     for (float f : { 100.0f, 1000.0f, 10000.0f })
