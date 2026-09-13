@@ -69,7 +69,7 @@ void SpectrumAnalyzer::paint (juce::Graphics& g)
 
     constexpr float minDb = -100.0f;
     constexpr float maxDb = 0.0f;
-    auto dbToY = [&bounds] (float db)
+    auto dbToY = [&bounds, minDb, maxDb] (float db)
     {
         auto level01 = juce::jmap (db, minDb, maxDb, 0.0f, 1.0f);
         return bounds.getBottom() - level01 * bounds.getHeight();
