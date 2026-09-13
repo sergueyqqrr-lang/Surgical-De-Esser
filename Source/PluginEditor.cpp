@@ -40,6 +40,108 @@ float SpectrumAnalyzer::freqToX (float freqHz, float width) const
     return width * (logF - logMin) / (logMax - logMin);
 }
 
+float SpectrumAnalyzer::xToFreq (float x, float width) const
+{
+    constexpr float minFreq = 20.0f, maxFreq = 20000.0f;
+    auto logMin = std::log10 (minFreq);
+    auto logMax = std::log10 (maxFreq);
+    auto frac = juce::jlimit (0.0f, 1.0f, width > 0.0f ? x / width : 0.0f);
+    auto logF = logMin + frac * (logMax - logMin);
+    return std::pow (10.0f, logF);
+}
+
+SpectrumAnalyzer::EdgeTarget nearestEdge (float mouseX, float sx1, float sx2, float radius)
+{
+    auto dLow = std::abs (mouseX - sx1);
+    auto dHigh = std::abs (mouseX - sx2);
+    if (dLow <= radius && dLow <= dHigh) return SpectrumAnalyzer::EdgeTarget::low;
+    if (dHigh <= radius) return SpectrumAnalyzer::EdgeTarget::high;
+    return SpectrumAnalyzer::EdgeTarget::none;
+}
+
+void SpectrumAnalyzer::mouseMove (const juce::MouseEvent& e)
+{
+    auto width = (float) getWidth();
+    auto sx1 = freqToX (proc.apvts.getRawParameterValue ("xoverLow")->load(), width);
+    auto sx2 = freqToX (proc.apvts.getRawParameterValue ("xoverHigh")->load(), width);
+
+    auto newHover = nearestEdge (e.position.x, sx1, sx2, grabRadiusPx);
+    if (newHover != hovering)
+    {
+        hovering = newHover;
+        setMouseCursor (hovering == EdgeTarget::none
+                            ? juce::MouseCursor::NormalCursor
+                            : juce::MouseCursor::LeftRightResizeCursor);
+        repaint();
+    }
+}
+
+void SpectrumAnalyzer::mouseExit (const juce::MouseEvent&)
+{
+    hovering = EdgeTarget::none;
+    setMouseCursor (juce::MouseCursor::NormalCursor);
+    repaint();
+}
+
+void SpectrumAnalyzer::mouseDown (const juce::MouseEvent& e)
+{
+    auto width = (float) getWidth();
+    auto sx1 = freqToX (proc.apvts.getRawParameterValue ("xoverLow")->load(), width);
+    auto sx2 = freqToX (proc.apvts.getRawParameterValue ("xoverHigh")->load(), width);
+
+    dragging = nearestEdge (e.position.x, sx1, sx2, grabRadiusPx);
+
+    if (dragging == EdgeTarget::low)
+    {
+        if (auto* param = proc.apvts.getParameter ("xoverLow"))
+            param->beginChangeGesture();
+    }
+    else if (dragging == EdgeTarget::high)
+    {
+        if (auto* param = proc.apvts.getParameter ("xoverHigh"))
+            param->beginChangeGesture();
+    }
+}
+
+void SpectrumAnalyzer::mouseDrag (const juce::MouseEvent& e)
+{
+    if (dragging == EdgeTarget::none)
+        return;
+
+    auto width = (float) getWidth();
+    auto freq = xToFreq (e.position.x, width);
+
+    if (dragging == EdgeTarget::low)
+    {
+        auto xHigh = proc.apvts.getRawParameterValue ("xoverHigh")->load();
+        freq = juce::jlimit (1000.0f, xHigh - 200.0f, freq);
+        if (auto* param = proc.apvts.getParameter ("xoverLow"))
+            param->setValueNotifyingHost (param->convertTo0to1 (freq));
+    }
+    else if (dragging == EdgeTarget::high)
+    {
+        auto xLow = proc.apvts.getRawParameterValue ("xoverLow")->load();
+        freq = juce::jlimit (xLow + 200.0f, 16000.0f, freq);
+        if (auto* param = proc.apvts.getParameter ("xoverHigh"))
+            param->setValueNotifyingHost (param->convertTo0to1 (freq));
+    }
+}
+
+void SpectrumAnalyzer::mouseUp (const juce::MouseEvent&)
+{
+    if (dragging == EdgeTarget::low)
+    {
+        if (auto* param = proc.apvts.getParameter ("xoverLow"))
+            param->endChangeGesture();
+    }
+    else if (dragging == EdgeTarget::high)
+    {
+        if (auto* param = proc.apvts.getParameter ("xoverHigh"))
+            param->endChangeGesture();
+    }
+    dragging = EdgeTarget::none;
+}
+
 void SpectrumAnalyzer::timerCallback()
 {
     // Si hay un frame de FFT nuevo, se calcula (esto solo actualiza los datos crudos).
@@ -107,9 +209,20 @@ void SpectrumAnalyzer::paint (juce::Graphics& g)
     auto sx2 = bounds.getX() + freqToX (xHigh, bounds.getWidth());
     g.setColour (Palette::cyan.withAlpha (0.10f));
     g.fillRect (juce::Rectangle<float> (sx1, bounds.getY(), sx2 - sx1, bounds.getHeight()));
-    g.setColour (Palette::cyan.withAlpha (0.4f));
+
+    // Línea "Inicio eses": se resalta al pasar el mouse cerca o al arrastrarla
+    bool lowActive = (hovering == EdgeTarget::low || dragging == EdgeTarget::low);
+    g.setColour (Palette::cyan.withAlpha (lowActive ? 0.9f : 0.4f));
     g.drawVerticalLine ((int) sx1, bounds.getY(), bounds.getBottom());
+    if (lowActive)
+        g.fillRoundedRectangle (sx1 - 1.5f, bounds.getY(), 3.0f, bounds.getHeight(), 1.5f);
+
+    // Línea "Fin eses"
+    bool highActive = (hovering == EdgeTarget::high || dragging == EdgeTarget::high);
+    g.setColour (Palette::cyan.withAlpha (highActive ? 0.9f : 0.4f));
     g.drawVerticalLine ((int) sx2, bounds.getY(), bounds.getBottom());
+    if (highActive)
+        g.fillRoundedRectangle (sx2 - 1.5f, bounds.getY(), 3.0f, bounds.getHeight(), 1.5f);
 
     // Curva del espectro en vivo (ya suavizada con ataque/caída, ver timerCallback)
     const auto& scope = smoothedData;
